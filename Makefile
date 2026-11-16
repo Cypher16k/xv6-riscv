@@ -152,6 +152,8 @@ UPROGS=\
 	$U/_dorphan\
 	$U/_sync\
 	$U/_getyeartest\
+	$U/_getpinfotest\
+	$U/_ps_xv6\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

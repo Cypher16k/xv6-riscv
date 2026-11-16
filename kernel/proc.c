@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "pstat.h"
 
 struct cpu cpus[NCPU];
 
@@ -89,6 +90,96 @@ myproc(void)
   return p;
 }
 
+// MiniOS-M5: account for timer ticks spent running
+void
+proc_tick(void)
+{
+  struct proc *p = myproc();
+
+  if (p) {
+    acquire(&p->lock);
+    if (p->state == RUNNING)
+      p->rtime++;
+    release(&p->lock);
+  }
+}
+
+// MiniOS-M5: copy process information to user space.
+
+// MiniOS-M5: copy process information to user space.
+int
+procinfo(uint64 addr)
+{
+  struct proc *p;
+  struct proc *curproc = myproc();
+  struct pinfo *snapshot;
+  int count = 0;
+  uint now;
+
+  // Allocate temporary storage for process snapshots.
+  snapshot = (struct pinfo *)kalloc();
+  if (snapshot == 0)
+    return -1;
+
+  // Read the current system tick count.
+  acquire(&tickslock);
+  now = ticks;
+  release(&tickslock);
+
+  // Lock order: wait_lock must come before p->lock.
+  acquire(&wait_lock);
+
+  for (p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+
+    if (p->state != UNUSED) {
+      snapshot[count].pid = p->pid;
+      snapshot[count].ppid = p->parent ? p->parent->pid : 0;
+      snapshot[count].state = p->state;
+      snapshot[count].ticks = p->rtime;
+      snapshot[count].nsched = p->nsched;
+      snapshot[count].ctime = p->ctime;
+      snapshot[count].sz = p->sz;
+      safestrcpy(snapshot[count].name, p->name, sizeof(snapshot[count].name));
+
+      count++;
+    }
+
+    release(&p->lock);
+  }
+
+  release(&wait_lock);
+
+  // Copy snapshots only after releasing all spinlocks.
+  for (int i = 0; i < count; i++) {
+    uint64 dst = addr + sizeof(int) + sizeof(uint) + i * sizeof(struct pinfo);
+
+    if (copyout(curproc->pagetable, curproc->sz, dst, (char *)&snapshot[i],
+                sizeof(struct pinfo)) < 0) {
+      kfree((char *)snapshot);
+      return -1;
+    }
+  }
+
+  // Copy the header (count and current tick).
+  struct {
+    int count;
+    uint now;
+  } header;
+
+  header.count = count;
+  header.now = now;
+
+  if (copyout(curproc->pagetable, curproc->sz, addr, (char *)&header,
+              sizeof(header)) < 0) {
+    kfree((char *)snapshot);
+    return -1;
+  }
+
+  kfree((char *)snapshot);
+  return 0;
+}
+
 int
 allocpid()
 {
@@ -124,6 +215,10 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+
+  p->ctime = ticks;
+  p->rtime = 0;
+  p->nsched = 0;
 
   // Allocate a trapframe page.
   if ((p->trapframe = (struct trapframe *)kalloc()) == 0) {
@@ -449,6 +544,7 @@ scheduler(void)
         // to release its lock and then reacquire it
         // before jumping back to us.
         p->state = RUNNING;
+        p->nsched++; // MiniOS-M5: count scheduler selections
         c->proc = p;
         swtch(&c->context, &p->context);
 

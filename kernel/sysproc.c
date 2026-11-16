@@ -29,6 +29,16 @@ sys_getyear(void)
 }
 
 uint64
+sys_getpinfo(void)
+{
+  uint64 addr;
+
+  argaddr(0, &addr);
+
+  return procinfo(addr);
+}
+
+uint64
 sys_fork(void)
 {
   return kfork();

@@ -82,8 +82,10 @@ usertrap(void)
     kexit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if (which_dev == 2)
+  if (which_dev == 2){
+    proc_tick();
     yield();
+  }
 
   prepare_return();
 
@@ -153,9 +155,11 @@ kerneltrap()
     panic("kerneltrap");
   }
 
-  // give up the CPU if this is a timer interrupt.
-  if (which_dev == 2 && myproc() != 0)
+  // MiniOS-M5: account for timer ticks and give up the CPU.
+  if (which_dev == 2 && myproc() != 0) {
+    proc_tick();
     yield();
+  }
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.

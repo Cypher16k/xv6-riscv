@@ -40,6 +40,7 @@ entry("chdir");
 entry("dup");
 entry("getpid");
 entry("getyear");
+entry("getpinfo");  # MiniOS-M5: get process information
 entry("sbrk");
 entry("pause");
 entry("uptime");

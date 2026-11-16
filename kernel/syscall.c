@@ -104,6 +104,7 @@ extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
 extern uint64 sys_sync(void);
 extern uint64 sys_getyear(void);
+extern uint64 sys_getpinfo(void);  // MiniOS-M5: get process information
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -132,6 +133,7 @@ static uint64 (*syscalls[])(void) = {
   [SYS_close]   = sys_close,
   [SYS_sync]    = sys_sync,
   [SYS_getyear] = sys_getyear,
+  [SYS_getpinfo] = sys_getpinfo,  // MiniOS-M5: get process information
   // clang-format on
 };
 
