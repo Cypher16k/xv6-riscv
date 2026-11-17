@@ -17,11 +17,14 @@ The objective of this experiment is to trace the execution of the `getyear()` sy
 GDB was used to inspect the system call dispatch mechanism, kernel execution flow, trapframe, register values, and trampoline instructions.
 
 The experiment verifies that:
+
 - The system call is invoked using the correct system call number.
 - The kernel correctly dispatches the request to `sys_getyear()`.
 - The system call returns the expected value, 2026.
 - The return value is stored in the process trapframe.
 - The trampoline restores the return value into the user-mode register before executing `sret`.
+
+The report distinguishes between execution stages directly observed in GDB and stages understood from the xv6 source code.
 
 ## 2. System Call Implementation
 
@@ -91,13 +94,15 @@ li a7, 23
 ecall
 ```
 
-The `ecall` instruction transfers execution from user mode to the kernel.
+The `ecall` instruction causes a transition from user mode to supervisor mode, initiating trap handling.
 
-### Stage 2: Trap handling
+**Verification method:** This stage is explained using the user-space syscall stub and xv6 source code. The `uservec` entry was not directly confirmed by a GDB breakpoint in this experiment.
 
-The trap is handled through the trampoline and `usertrap()`.
+### Stage 2: Trap handling and kernel execution flow
 
-The call stack observed in GDB was:
+After the `ecall` instruction, xv6 uses the trampoline entry routine `uservec` to save user registers and transfer control into the kernel trap handler.
+
+The observed GDB call stack was:
 
 ```text
 #0 sys_getyear () at kernel/sysproc.c:27
@@ -106,7 +111,9 @@ The call stack observed in GDB was:
 #3 0x3ffffff09c in ?? ()
 ```
 
-This confirms that execution reached `sys_getyear()` through the expected syscall dispatch path.
+This call stack confirms that execution reached `sys_getyear()` through the expected syscall dispatch path.
+
+The final frame points into the trampoline's mapped virtual address range. It should not be interpreted as a direct breakpoint observation of `uservec`; the actual entry and return routines are identified using the trampoline source code.
 
 ### Stage 3: System call identification
 
@@ -167,7 +174,7 @@ a0    0x7ea    2026
 pc    0x80002ab0    0x80002ab0 <syscall+58>
 ```
 
-**Observation:** The return value is correctly placed in register `a0`. Hexadecimal `0x7ea` represents decimal `2026`.
+**Observation:** The handler returns the expected value. Hexadecimal `0x7ea` represents decimal `2026`, and the return value is present in register `a0`.
 
 ### Stage 5: Trapframe verification
 
@@ -195,9 +202,9 @@ $3 = 0x7ea
 
 ### Stage 6: Trampoline register restoration
 
-The trampoline's `userret` routine restores the saved user registers.
+The trampoline's `userret` routine restores the saved user registers and switches back to the user page table.
 
-Its mapped virtual address was inspected using:
+The mapped trampoline address was inspected using:
 
 ```gdb
 break *0x3ffffff09c
@@ -223,6 +230,8 @@ sret
 ```
 
 The `ld a0,112(a0)` instruction restores the saved user-mode `a0` register. The `sret` instruction returns execution to user mode.
+
+**Observation:** The GDB inspection of the trampoline return path confirms the instructions responsible for restoring user registers and returning from supervisor mode.
 
 ### Stage 7: Verification immediately before returning to user mode
 
@@ -252,7 +261,7 @@ pc    0x3ffffff120    0x3ffffff120
 a0    0x7ea           2026
 ```
 
-**Observation:** Immediately before executing `sret`, register `a0` contains `2026`. This confirms that the trampoline restored the correct system call return value.
+**Observation:** Immediately before executing `sret`, register `a0` contains `2026`. This confirms that the trampoline restored the correct system call return value at the user-mode return boundary.
 
 ## 5. Summary of GDB Observations
 
@@ -262,12 +271,13 @@ a0    0x7ea           2026
 | Handler return value | 2026 | Passed |
 | Return register (`a0`) | `0x7ea` = 2026 | Passed |
 | Trapframe `a0` | `0x7ea` | Passed |
-| PC before `sret` | `0x3ffffff120` | Passed |
+| Trampoline return-path inspection | `0x3ffffff09c` | Passed |
+| PC at `sret` breakpoint | `0x3ffffff120` | Passed |
 | Restored user `a0` | `0x7ea` = 2026 | Passed |
 
 ## 6. System Call Execution Flow
 
-The complete execution flow is:
+The complete execution flow, combining the GDB observations with the xv6 source-code execution path, is:
 
 ```text
 User program: getyeartest
@@ -308,6 +318,8 @@ sret
 User mode resumes with a0 = 2026
 ```
 
+**Note:** The flow diagram represents the complete execution path as understood from the xv6 source code. Not every stage was independently stopped at using a GDB breakpoint. The register values, handler execution, trapframe value, and trampoline return boundary were directly observed.
+
 ## 7. Conclusion
 
 The GDB tracing experiment successfully verified the execution of the `getyear()` system call in xv6.
@@ -316,4 +328,4 @@ The system call number was correctly identified as 23, the kernel handler return
 
 The trampoline subsequently restored the value into register `a0` before executing `sret`.
 
-Therefore, the experiment verifies the complete system call return-value path from kernel execution through trapframe restoration to the user-mode return boundary.
+Therefore, the experiment provides direct GDB evidence of the syscall dispatch, kernel return value, trapframe storage, and trampoline register restoration, while the complete trap-entry flow is supported by inspection of the xv6 source code.
