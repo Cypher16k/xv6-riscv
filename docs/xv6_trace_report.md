@@ -1,11 +1,11 @@
 # xv6 RISC-V System Call Trace Report
 ## M5 — `getyear()` System Call
 
-**Project:** MiniOS  
-**Component:** xv6 Kernel (M5)  
-**System Call:** `getyear()`  
-**System Call Number:** 23  
-**Expected Return Value:** 2026  
+**Project:** MiniOS
+**Component:** xv6 Kernel (M5)
+**System Call:** `getyear()`
+**System Call Number:** 23
+**Expected Return Value:** 2026
 **Architecture:** RISC-V 64-bit
 
 ---
